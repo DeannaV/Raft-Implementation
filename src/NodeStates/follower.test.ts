@@ -2,6 +2,7 @@ import { follower, getNextState, applyEntry, updateStore } from './follower';
 import { ServerConfig, ServerState, StatusType, AppendEntriesRequest, LogEntry, StoreIndex } from '../types';
 import WebSocket from "ws";
 import { delay } from '../utilities';
+import { Server } from 'http';
 
 const TEST_SERVER_CONFIG: ServerConfig = {
     serverName: "Test01",
@@ -110,7 +111,8 @@ test('Get next state returns same state if term less than current', () => {
     const request = getTestRequest(); // term = 1
     const serverState = getTestServerState();
     serverState.currentTerm = 2;
-    const response = getNextState(serverState, request);
+    const mockUpdateStore = jest.fn(serverState => serverState);
+    const response = getNextState(serverState, request, mockUpdateStore);
     expect(response.state).toBe(serverState);
     expect(response.success).toBe(false);
 });
@@ -130,7 +132,8 @@ test(
         }
     ];
     const serverState = testServerState;
-    const response = getNextState(serverState, request);
+    const mockUpdateStore = jest.fn(serverState => serverState);
+    const response = getNextState(serverState, request, mockUpdateStore);
     const expectedState = {
         ...testServerState,
         currentTerm: 7
@@ -154,7 +157,8 @@ test(
     const serverState = getTestServerState();
     const serverEntries = getTestEntries();
     serverState.log = serverEntries;
-    const response = getNextState(serverState, request);
+    const mockUpdateStore = jest.fn(serverState => serverState);
+    const response = getNextState(serverState, request, mockUpdateStore);
     const expectedState = {
         ...serverState,
         log: serverEntries,
@@ -179,7 +183,8 @@ test('Get next state updates log entries', () => {
     const serverState = getTestServerState();
     const testEntries = getTestEntries();
     serverState.log = testEntries;
-    const response = getNextState(serverState, request);
+    const mockUpdateStore = jest.fn(serverState => serverState);
+    const response = getNextState(serverState, request, mockUpdateStore);
 
     const entries = testEntries.concat([{
         key: "four",
@@ -193,6 +198,7 @@ test('Get next state updates log entries', () => {
     };
     expect(response.state).toEqual(expectedState);
     expect(response.success).toEqual(true);
+    expect(mockUpdateStore.mock.calls.length).toBe(0);
 });
 
 test('Get next state overrides conflicting log entries with smaller index', () => {
@@ -211,7 +217,8 @@ test('Get next state overrides conflicting log entries with smaller index', () =
     const serverState = getTestServerState();
     serverState.log = followerEntries;
 
-    const response = getNextState(serverState, request);
+    const mockUpdateStore = jest.fn(serverState => serverState);
+    const response = getNextState(serverState, request, mockUpdateStore);
 
     const expectedLog: Array<LogEntry> = [followerEntries[0], followerEntries[1], {...request.entries[0], term: 3}];
     const expectedState: ServerState = {
@@ -221,6 +228,7 @@ test('Get next state overrides conflicting log entries with smaller index', () =
     };
     expect(response.state).toEqual(expectedState);
     expect(response.success).toEqual(true);
+    expect(mockUpdateStore.mock.calls.length).toBe(0);
 });
 
 test('Commit index is updated to smaller of leader commit and log entries, fewer log entries than leader commit', () => {
@@ -234,9 +242,11 @@ test('Commit index is updated to smaller of leader commit and log entries, fewer
     serverState.commitIndex = null;
     serverState.log = getTestEntries(); // 3 test entries
 
-    const response = getNextState(serverState, request);
+    const mockUpdateStore = jest.fn(serverState => serverState);
+    const response = getNextState(serverState, request, mockUpdateStore);
 
     expect(response.state.commitIndex).toBe(2);
+    expect(mockUpdateStore.mock.calls.length).toBe(1);
 });
 
 test('Commit index is updated to smaller of leader commit and log entries, same number of log entries as leader commit', () => {
@@ -266,9 +276,45 @@ test('Commit index is updated to smaller of leader commit and log entries, same 
         }
     ]); // 3 test entries
 
-    const response = getNextState(serverState, request);
+    const mockUpdateStore = jest.fn(serverState => serverState);
+    const response = getNextState(serverState, request, mockUpdateStore);
 
     expect(response.state.commitIndex).toBe(5);
+    expect(mockUpdateStore.mock.calls.length).toBe(1);
+});
+
+test('Commit index is unchanged, so no call is made to update store', () => {
+    const request = getTestRequest();
+    request.leaderCommit = 5;
+    request.prevLogIndex = 5;
+    request.prevLogTerm = 3;
+    request.leadersTerm = 3;
+
+    const serverState = getTestServerState();
+    serverState.commitIndex = 5;
+    serverState.log = getTestEntries().concat([
+        {
+            key: "four",
+            value: "FOUR",
+            term: 3
+        },
+        {
+            key: "five",
+            value: "FIVE",
+            term: 3
+        },
+        {
+            key: "six",
+            value: "SIX",
+            term: 3
+        }
+    ]); // 3 test entries
+
+    const mockUpdateStore = jest.fn(serverState => serverState);
+    const response = getNextState(serverState, request, mockUpdateStore);
+
+    expect(response.state.commitIndex).toBe(5);
+    expect(mockUpdateStore.mock.calls.length).toBe(0);
 });
 
 

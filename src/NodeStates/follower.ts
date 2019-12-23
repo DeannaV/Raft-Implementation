@@ -4,20 +4,20 @@ import { StatusType, ServerState, ServerConfig, AppendEntriesRequest, ProcessApp
 import { resolveableTimeoutPromise } from "../utilities";
 import e from "express";
 
-export function getNextState(serverState: ServerState, request: AppendEntriesRequest): ProcessAppendEntries {
+export function getNextState(serverState: ServerState, request: AppendEntriesRequest, updateStoreFunc: UpdateStore): ProcessAppendEntries {
     if (request.leadersTerm < serverState.currentTerm) {
         return {state: serverState, success: false};
     }
 
     const currentTerm = request.leadersTerm;
  
+    // If log does not contain an entry at prevLogIndex, or if that entries term does not match the prev log term
     if (request.prevLogIndex != null &&
         (serverState.log[request.prevLogIndex] == null || serverState.log[request.prevLogIndex].term != request.prevLogTerm)) {
         return {state: {...serverState, currentTerm}, success: false};
     }
 
     // TODO How does a new leader find out the prev log index of each follower?
-    // Is this code correct for prevLogIndex == null
     const nextIndex = (request.prevLogIndex || -1) + 1;
     const logEntries = request.entries.map(e => ({...e, term: request.leadersTerm}));
     const entries = serverState.log.slice(0, nextIndex).concat(logEntries);
@@ -27,21 +27,29 @@ export function getNextState(serverState: ServerState, request: AppendEntriesReq
         commitIndex = request.leaderCommit > (serverState.commitIndex || -1) ? Math.min(request.leaderCommit, entries.length - 1) : serverState.commitIndex;
     }
 
+    const nextState: ServerState = {
+        currentTerm,
+        votedFor: serverState.votedFor,
+        log: entries,
+        commitIndex,
+        lastApplied: serverState.lastApplied,
+        status: serverState.status,
+        store: serverState.store
+    };
+
+    let finalState = nextState;
+    if (commitIndex != serverState.commitIndex) {
+        finalState = updateStoreFunc(nextState);
+    }
+
     return {
-        state: {
-            currentTerm,
-            votedFor: serverState.votedFor,
-            log: entries,
-            commitIndex,
-            lastApplied: serverState.lastApplied,
-            status: serverState.status,
-            store: serverState.store
-        },
+        state: finalState,
         success: true
     };
 }
 
 // updates the store and the last applied
+type UpdateStore = typeof updateStore;
 export function updateStore(serverState: ServerState): ServerState {
     if (serverState.commitIndex == null) {
         return serverState;
