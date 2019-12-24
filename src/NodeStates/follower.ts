@@ -1,20 +1,71 @@
 import WebSocket from "ws";
 
-import { StatusType, ServerState, ServerConfig, AppendEntriesRequest, ProcessAppendEntries, StoreIndex, LogEntry } from "../types";
+import { StatusType, ServerState, ServerConfig, AppendEntriesRequest, ProcessAppendEntries, StoreIndex, LogEntry, RequestVoteRequest, RequestVoteReply } from "../types";
 import { resolveableTimeoutPromise } from "../utilities";
 import e from "express";
 
-export function getNextState(serverState: ServerState, request: AppendEntriesRequest, updateStoreFunc: UpdateStore): ProcessAppendEntries {
+export function updateTerm(serverState: ServerState, request: RequestVoteRequest | AppendEntriesRequest) {
+    let term = serverState.currentTerm;
+    if (request.type === 'RequestVoteRequest') {
+        term = Math.max(request.candidatesTerm, serverState.currentTerm);
+    }
+
+    if (request.type === 'AppendEntriesRequest') {
+        term = Math.max(request.leadersTerm, serverState.currentTerm);
+    }
+
+    return {
+        ...serverState,
+        currentTerm: term
+    };
+}
+
+export function processRequestVote(serverState: ServerState, request: RequestVoteRequest): RequestVoteReply {
+    if (request.candidatesTerm < serverState.currentTerm) {
+        return {
+            voteGranted: false,
+            currentTerm: serverState.currentTerm
+        };
+    }
+
+    if (serverState.votedFor != null && serverState.votedFor !== request.candidateId) {
+        return {
+            voteGranted: false,
+            currentTerm: serverState.currentTerm
+        };
+    }
+
+    // The candidates log must be at least as up-to-date as the receiver's log.
+    // If the logs have last entries with different terms, the log with the later term is more up-to-date
+    // If the logs have the same last entry terms, the longer log is more up-to-date
+    const lastEntry = serverState.log[serverState.log.length - 1];
+
+
+    if (lastEntry == null
+        || lastEntry.term < request.lastLogTerm
+        || lastEntry.term === request.lastLogTerm && serverState.log.length - 1 <= request.lastLogIndex
+    ) {
+        return {
+            voteGranted: true,
+            currentTerm: serverState.currentTerm
+        };
+    } else {
+        return {
+            voteGranted: false,
+            currentTerm: serverState.currentTerm
+        };
+    }
+}
+
+export function processAppendEntries(serverState: ServerState, request: AppendEntriesRequest, updateStoreFunc: UpdateStore): ProcessAppendEntries {
     if (request.leadersTerm < serverState.currentTerm) {
         return {state: serverState, success: false};
     }
 
-    const currentTerm = request.leadersTerm;
- 
     // If log does not contain an entry at prevLogIndex, or if that entries term does not match the prev log term
     if (request.prevLogIndex != null &&
         (serverState.log[request.prevLogIndex] == null || serverState.log[request.prevLogIndex].term != request.prevLogTerm)) {
-        return {state: {...serverState, currentTerm}, success: false};
+        return {state: {...serverState}, success: false};
     }
 
     // TODO How does a new leader find out the prev log index of each follower?
@@ -28,7 +79,7 @@ export function getNextState(serverState: ServerState, request: AppendEntriesReq
     }
 
     const nextState: ServerState = {
-        currentTerm,
+        currentTerm: serverState.currentTerm,
         votedFor: serverState.votedFor,
         log: entries,
         commitIndex,

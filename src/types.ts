@@ -18,10 +18,24 @@ export interface AppendEntriesRequest {
     prevLogTerm: number | null;
     entries: Array<RequestLogEntry>;
     leaderCommit: number | null;
+    type: 'AppendEntriesRequest';
 }
 
 export interface AppendEntriesReply {
     success: boolean;
+    currentTerm: number;
+}
+
+export interface RequestVoteRequest {
+    candidatesTerm: number;
+    candidateId: string;
+    lastLogIndex: number | null;
+    lastLogTerm: number | null;
+    type: 'RequestVoteRequest';
+}
+
+export interface RequestVoteReply {
+    voteGranted: boolean;
     currentTerm: number;
 }
 
