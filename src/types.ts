@@ -58,6 +58,11 @@ export interface ProcessAppendEntries {
     success: boolean;
 }
 
+export interface ProcessRequestVote {
+    state: ServerState;
+    voteGranted: boolean;
+}
+
 export interface ServerConfig {
     serverName: string;
     apiPort: number;

@@ -1,8 +1,11 @@
-import WebSocket from "ws";
+import WebSocket from "../websocketType";
 
-import { StatusType, ServerState, ServerConfig, AppendEntriesRequest, ProcessAppendEntries, StoreIndex, LogEntry, RequestVoteRequest, RequestVoteReply } from "../types";
-import { resolveableTimeoutPromise } from "../utilities";
-import e from "express";
+import { StatusType, ServerState, ServerConfig, AppendEntriesRequest, AppendEntriesReply, ProcessAppendEntries, ProcessRequestVote, StoreIndex, LogEntry, RequestVoteRequest, RequestVoteReply } from "../types";
+import { isAppendEntriesRequest, isRequestVoteRequest } from '../typeguards';
+import { resolveableTimeoutPromise, delay } from "../utilities";
+import e, { request } from "express";
+
+
 
 export function updateTerm(serverState: ServerState, request: RequestVoteRequest | AppendEntriesRequest) {
     let term = serverState.currentTerm;
@@ -20,18 +23,18 @@ export function updateTerm(serverState: ServerState, request: RequestVoteRequest
     };
 }
 
-export function processRequestVote(serverState: ServerState, request: RequestVoteRequest): RequestVoteReply {
+export function processRequestVote(serverState: ServerState, request: RequestVoteRequest): ProcessRequestVote {
     if (request.candidatesTerm < serverState.currentTerm) {
         return {
             voteGranted: false,
-            currentTerm: serverState.currentTerm
+            state: serverState
         };
     }
 
     if (serverState.votedFor != null && serverState.votedFor !== request.candidateId) {
         return {
             voteGranted: false,
-            currentTerm: serverState.currentTerm
+            state: serverState
         };
     }
 
@@ -45,14 +48,19 @@ export function processRequestVote(serverState: ServerState, request: RequestVot
         || lastEntry.term < request.lastLogTerm
         || lastEntry.term === request.lastLogTerm && serverState.log.length - 1 <= request.lastLogIndex
     ) {
+        const nextState = {
+            ...serverState,
+            votedFor: request.candidateId
+        };
+
         return {
             voteGranted: true,
-            currentTerm: serverState.currentTerm
+            state: nextState
         };
     } else {
         return {
             voteGranted: false,
-            currentTerm: serverState.currentTerm
+            state: serverState
         };
     }
 }
@@ -130,29 +138,115 @@ export function applyEntry(store: StoreIndex, entry: LogEntry): StoreIndex {
     };
 }
 
+export function parseMessage(message: string): RequestVoteRequest | AppendEntriesRequest | null {
+    try {
+        const obj = JSON.parse(message);
+        if (isAppendEntriesRequest(obj)) {
+            return obj;
+        }
+        if (isRequestVoteRequest(obj)) {
+            return obj;
+        }
+
+        return null;
+    } catch {
+        return null;
+    }
+}
+
+export function validHeartbeat(message: RequestVoteRequest | AppendEntriesRequest | null): boolean {
+    return true;
+}
+
+interface ProcessMessage {
+    state: ServerState;
+    response: string;
+}
+
+function processMessage(serverState: ServerState, message: RequestVoteRequest | AppendEntriesRequest): ProcessMessage {
+    let state = updateTerm(serverState, message);
+    let response = '';
+    switch (message.type) {
+        case 'AppendEntriesRequest': {
+            const result = processAppendEntries(state, message, updateStore);
+            state = result.state;
+
+            const responseObj: AppendEntriesReply = {
+                success: result.success,
+                currentTerm: state.currentTerm
+            };
+            response = JSON.stringify(responseObj);
+            break;
+        }
+        case 'RequestVoteRequest': {
+            const result = processRequestVote(state, message);
+            state = result.state;
+
+            const responseObj: RequestVoteReply = {
+                currentTerm: result.state.currentTerm,
+                voteGranted: result.voteGranted
+            }
+            response = JSON.stringify(responseObj);
+            break;
+        }
+        default:
+            throw 'Message type unknown';
+    }
+
+    return {
+        response,
+        state
+    };
+}
+
 export async function follower(serverConfig: ServerConfig, serverState: ServerState): Promise<ServerState> {
     const wss = new WebSocket.Server({port: serverConfig.wssPort});
 
-    wss.on('connection', function connection(websocket) {
-        websocket.on('message', function incoming(message) {
-            
-        })
+    let state = serverState;
 
-        websocket.send(`You have connected to ${serverConfig.serverName}.`);
+    wss.on('connection', function connection(websocket: WebSocket) {
+        const [resolve, promise] = resolveableTimeoutPromise(serverConfig.heartbeat);
+        websocket.promise .heartbeatPromise = promise;
+        websocket.resolvePromise = resolve;
+
+        websocket.on('message', function incoming(message: string) {
+            const parsedMessage = parseMessage(message); 
+
+            if (parsedMessage != null) {
+                if (validHeartbeat(parsedMessage)) {
+                    websocket.resolvePromise();
+                }
+
+                const result = processMessage(state, parsedMessage);
+                state = result.state;
+                websocket.send(result.response);
+            }
+            
+            const [resolve, promise] = resolveableTimeoutPromise(serverConfig.heartbeat);
+            websocket.heartbeatPromise = promise;
+            websocket.resolvePromise = resolve;
+        });
     });
 
-    const [resolve, promise] = resolveableTimeoutPromise(serverConfig.heartbeat);
-
-    let hasRecentHeartbeat = true;
-    while (hasRecentHeartbeat) {
-        try {
-            await promise;
-        } catch {
-            hasRecentHeartbeat = false;
-        }
+    // Delay to initialise connection to leader
+    if (wss.clients.size === 0) {
+        await delay(serverConfig.heartbeat);
     }
 
-    
+    let hasRecentHeartbeat: Array<boolean> = [];
+    do {
+        hasRecentHeartbeat = hasRecentHeartbeat.map(v => false);
+
+        [...wss.clients].forEach((ws, i) => {
+            try {
+                await ws.heartbeatPromise;
+                hasRecentHeartbeat[i] = true;
+            } catch {
+                // hasRecentHeartbeat was initialised to false
+            }
+        });
+    } while (hasRecentHeartbeat.includes(true));
+
     wss.close();
     
     const newState = {...serverState, status: StatusType.Candidate};
