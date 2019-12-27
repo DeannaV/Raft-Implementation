@@ -1,5 +1,6 @@
-import WebSocket from "../websocketType";
+import WebSocket from "ws";
 
+import { WebsocketWithPromise } from '../WebsocketWithPromise';
 import { StatusType, ServerState, ServerConfig, AppendEntriesRequest, AppendEntriesReply, ProcessAppendEntries, ProcessRequestVote, StoreIndex, LogEntry, RequestVoteRequest, RequestVoteReply } from "../types";
 import { isAppendEntriesRequest, isRequestVoteRequest } from '../typeguards';
 import { resolveableTimeoutPromise, delay } from "../utilities";
@@ -204,17 +205,17 @@ export async function follower(serverConfig: ServerConfig, serverState: ServerSt
 
     let state = serverState;
 
-    wss.on('connection', function connection(websocket: WebSocket) {
+    wss.on('connection', function connection(websocket: WebsocketWithPromise) {
         const [resolve, promise] = resolveableTimeoutPromise(serverConfig.heartbeat);
-        websocket.promise .heartbeatPromise = promise;
-        websocket.resolvePromise = resolve;
+        websocket.promise = promise;
+        websocket.resolve = resolve;
 
         websocket.on('message', function incoming(message: string) {
             const parsedMessage = parseMessage(message); 
 
             if (parsedMessage != null) {
                 if (validHeartbeat(parsedMessage)) {
-                    websocket.resolvePromise();
+                    websocket.resolve();
                 }
 
                 const result = processMessage(state, parsedMessage);
@@ -223,8 +224,8 @@ export async function follower(serverConfig: ServerConfig, serverState: ServerSt
             }
             
             const [resolve, promise] = resolveableTimeoutPromise(serverConfig.heartbeat);
-            websocket.heartbeatPromise = promise;
-            websocket.resolvePromise = resolve;
+            websocket.promise = promise;
+            websocket.resolve = resolve;
         });
     });
 
@@ -233,19 +234,23 @@ export async function follower(serverConfig: ServerConfig, serverState: ServerSt
         await delay(serverConfig.heartbeat);
     }
 
-    let hasRecentHeartbeat: Array<boolean> = [];
-    do {
-        hasRecentHeartbeat = hasRecentHeartbeat.map(v => false);
+    let hasRecentHeartbeat = false;
+    while(hasRecentHeartbeat) {
+        hasRecentHeartbeat = false;
 
-        [...wss.clients].forEach((ws, i) => {
+        const clients: Array<WebsocketWithPromise> = [...wss.clients];
+
+        for (let i = 0; i <= clients.length; i++) {
             try {
-                await ws.heartbeatPromise;
-                hasRecentHeartbeat[i] = true;
+                if (clients[i].promise != null) {
+                    await clients[i].promise;
+                    hasRecentHeartbeat = true;
+                }
             } catch {
                 // hasRecentHeartbeat was initialised to false
             }
-        });
-    } while (hasRecentHeartbeat.includes(true));
+        };
+    };
 
     wss.close();
     
