@@ -239,17 +239,18 @@ export async function follower(serverConfig: ServerConfig, serverState: ServerSt
         hasRecentHeartbeat = false;
 
         const clients: Array<WebsocketWithPromise> = [...wss.clients];
-
-        for (let i = 0; i <= clients.length; i++) {
+        const promises = clients.map(async c => {
             try {
-                if (clients[i].promise != null) {
-                    await clients[i].promise;
+                if (c.promise != null) {
+                    await c.promise;
                     hasRecentHeartbeat = true;
                 }
             } catch {
                 // hasRecentHeartbeat was initialised to false
             }
-        };
+        })
+
+        await Promise.all(promises);
     };
 
     wss.close();
