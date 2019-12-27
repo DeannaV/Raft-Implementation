@@ -1,7 +1,7 @@
 import { follower, processAppendEntries, applyEntry, updateStore, processRequestVote, updateTerm } from './follower';
-import { ServerConfig, ServerState, StatusType, AppendEntriesRequest, LogEntry, StoreIndex, RequestVoteRequest, RequestLogEntry } from '../types';
+import { ServerConfig, ServerState, StatusType, AppendEntriesRequest, LogEntry, StoreIndex, RequestVoteRequest, RequestLogEntry } from '../../types';
 import WebSocket from "ws";
-import { delay } from '../utilities';
+import { delay } from '../../utilities';
 import { Server } from 'http';
 
 const TEST_SERVER_CONFIG: ServerConfig = {
@@ -459,7 +459,7 @@ test('Follower returns its current term in response', () => {
     request.lastLogTerm = 999;
 
     const result = processRequestVote(serverState, request);
-    expect(result.currentTerm).toBe(5);
+    expect(result.state.currentTerm).toBe(5);
 });
 
 test('Vote is denied when follower has already voted for someone else ', () => {

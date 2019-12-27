@@ -1,9 +1,9 @@
 import WebSocket from "ws";
 
-import { WebsocketWithPromise } from '../WebsocketWithPromise';
-import { StatusType, ServerState, ServerConfig, AppendEntriesRequest, AppendEntriesReply, ProcessAppendEntries, ProcessRequestVote, StoreIndex, LogEntry, RequestVoteRequest, RequestVoteReply } from "../types";
-import { isAppendEntriesRequest, isRequestVoteRequest } from '../typeguards';
-import { resolveableTimeoutPromise, delay } from "../utilities";
+import { WebsocketWithPromise } from '../../WebsocketWithPromise';
+import { StatusType, ServerState, ServerConfig, AppendEntriesRequest, AppendEntriesReply, ProcessAppendEntries, ProcessRequestVote, StoreIndex, LogEntry, RequestVoteRequest, RequestVoteReply } from "../../types";
+import { isAppendEntriesRequest, isRequestVoteRequest } from '../../typeguards';
+import { resolveableTimeoutPromise, delay } from "../../utilities";
 import e, { request } from "express";
 
 
