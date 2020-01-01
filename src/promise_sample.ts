@@ -3,7 +3,7 @@ import { cancelableTimeoutPromise, resolveableTimeoutPromise } from "./utilities
 export async function myFunc(): Promise<true> {
     let continueLoop = true;
     while (continueLoop) {
-        const [cancel, promise] = cancelableTimeoutPromise(2300);
+        const [cancel, _, promise] = cancelableTimeoutPromise(2300);
         promise.then(function() {
             console.log('Loop got cancelled');
             continueLoop = false;

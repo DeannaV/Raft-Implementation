@@ -1,4 +1,4 @@
-import { follower } from './NodeStates/follower';
+import { follower } from './NodeStates/Follower/follower';
 import { ServerConfig, ServerState, StatusType } from './types';
 import WebSocket from "ws";
 import { delay } from './utilities';
@@ -16,7 +16,8 @@ const serverState: ServerState = {
     log: [],
     commitIndex: 0,
     lastApplied: 0,
-    status: StatusType.Follower
+    status: StatusType.Follower,
+    store: {}
 }
 
 async function wsTest2() {

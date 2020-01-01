@@ -2,7 +2,7 @@
   "name": "DistributedMap",
   "version": "1.0.0",
   "description": "",
-  "main": "dist/wsTest2.js",
+  "main": "dist/sample1.js",
   "scripts": {
     "test": "jest",
     "build": "tsc",
