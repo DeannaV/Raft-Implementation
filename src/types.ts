@@ -1,4 +1,4 @@
-export enum StatusType {Leader, Follower, Candidate};
+export enum StatusType {Leader, Follower, Candidate, CandidateTimeout};
 
 export interface RequestLogEntry {
     key: string;
@@ -37,6 +37,7 @@ export interface RequestVoteRequest {
 export interface RequestVoteReply {
     voteGranted: boolean;
     currentTerm: number;
+    type: 'RequestVoteReply';
 }
 
 export interface StoreIndex {

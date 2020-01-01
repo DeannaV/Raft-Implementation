@@ -1,10 +1,14 @@
 // Thank-you Narthollis
-export function cancelableTimeoutPromise(ms: number): [() => void, Promise<void>] {
+export function cancelableTimeoutPromise(ms: number): [() => void, () => void, Promise<void>] {
     let promiseResolve: () => void;
     let promiseReject: () => void;
     let timeoutHandle: ReturnType<typeof setTimeout>;
 
     return [
+        () => {
+            clearTimeout(timeoutHandle);
+            promiseResolve();
+        },
         () => {
             clearTimeout(timeoutHandle);
             promiseReject();
@@ -18,7 +22,7 @@ export function cancelableTimeoutPromise(ms: number): [() => void, Promise<void>
     ];
 }
 
-export function resolveableTimeoutPromise(ms: number): [() => void, Promise<void>] {
+export function resolveableTimeoutPromise(ms: number): [() => void, () => void, Promise<void>] {
     let promiseResolve: () => void;
     let promiseReject: () => void;
     let timeoutHandle: ReturnType<typeof setTimeout>;
@@ -27,6 +31,10 @@ export function resolveableTimeoutPromise(ms: number): [() => void, Promise<void
         () => {
             clearTimeout(timeoutHandle);
             promiseResolve();
+        },
+        () => {
+            clearTimeout(timeoutHandle);
+            promiseReject();
         },
         new Promise((res, rej) => {
             promiseResolve = res;

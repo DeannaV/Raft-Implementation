@@ -1,10 +1,11 @@
-import { defaults } from './constants';
+import WebSocket from "ws";
+
+import { serverConfigs, NUMBER_OF_NODES } from './constants';
 import { StatusType, ServerState, ServerConfig } from "./types";
-import { candidate, follower, leader } from "./NodeStates";
+import { candidate, candidateTimeout, follower, leader } from "./NodeStates";
 
 const argValue = process.argv[2] ? parseInt(process.argv[2]) : 0;
-const serverConfig: ServerConfig = defaults[argValue];
-const numberOfNodes = 3;
+const serverConfig: ServerConfig = serverConfigs[argValue];
 
 const INITIAL_STATE: ServerState = {
     currentTerm: 0,
@@ -17,6 +18,8 @@ const INITIAL_STATE: ServerState = {
 };
 
 async function distributedMap(serverConfig: ServerConfig, numberOfNodes: number) {
+    const nodes = serverConfigs.slice(0, numberOfNodes); 
+    
     let currentState: ServerState = INITIAL_STATE;
 
     while (true) {
@@ -26,20 +29,24 @@ async function distributedMap(serverConfig: ServerConfig, numberOfNodes: number)
                 break;
             }
             case StatusType.Candidate: {
-                currentState = await candidate(serverConfig, currentState, numberOfNodes);
+                currentState = await candidate(serverConfig, currentState, nodes);
+                break;
+            }
+            case StatusType.CandidateTimeout: {
+                currentState = await candidateTimeout(serverConfig, currentState);
                 break;
             }
             case StatusType.Leader: {
-                currentState = await leader(serverConfig, currentState, numberOfNodes);
+                currentState = await leader(serverConfig, currentState, nodes);
                 break;
             }
             default:
-                console.error("Error: Invalid status");
+                throw `Invalid Status type ${currentState.status}`;
         }
     }
 }
 
-distributedMap(serverConfig, numberOfNodes);
+distributedMap(serverConfig, NUMBER_OF_NODES);
 
 
 /**

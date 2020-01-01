@@ -46,3 +46,29 @@ test('Term updates if leaders term is greater than followers', () => {
     const result = updateTerm(serverState, request);
     expect(result.currentTerm).toBe(100);
 });
+
+test('Voted for is set to null if term updates', () => {
+    const serverState = getTestServerState();
+    serverState.currentTerm = 1;
+    serverState.votedFor = "Candidate01";
+
+    const request = getTestAppendEntriesRequest();
+    request.leadersTerm = 100;
+
+    const result = updateTerm(serverState, request);
+    expect(result.currentTerm).toBe(100);
+    expect(result.votedFor).toBe(null);
+});
+
+test('Voted for is unchanged if term is not updated', () => {
+    const serverState = getTestServerState();
+    serverState.currentTerm = 1;
+    serverState.votedFor = "Candidate01";
+
+    const request = getTestAppendEntriesRequest();
+    request.leadersTerm = 1;
+
+    const result = updateTerm(serverState, request);
+    expect(result.currentTerm).toBe(1);
+    expect(result.votedFor).toBe("Candidate01");
+});

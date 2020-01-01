@@ -1,6 +1,7 @@
 
-import { candidate } from "./candidate";
+import { candidate } from "./Candidate/candidate";
+import { candidateTimeout } from "./Candidate/candidateTimeout";
 import { follower } from "./Follower/follower";
-import { leader } from "./leader";
+import { leader } from "./Leader/leader";
 
-export { candidate, follower, leader};
+export { candidate, candidateTimeout, follower, leader};

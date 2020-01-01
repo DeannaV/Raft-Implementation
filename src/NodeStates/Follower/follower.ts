@@ -1,18 +1,17 @@
 import WebSocket from "ws";
 
 import { WebsocketWithPromise } from '../../WebsocketWithPromise';
-import { StatusType, ServerState, ServerConfig, AppendEntriesRequest, AppendEntriesReply, ProcessAppendEntries, RequestVoteRequest, RequestVoteReply } from "../../types";
+import { StatusType, ServerState, ServerConfig, AppendEntriesRequest, RequestVoteRequest } from "../../types";
 import { isAppendEntriesRequest, isRequestVoteRequest } from '../../typeguards';
-import { resolveableTimeoutPromise, delay } from "../../utilities";
+import { resolveableTimeoutPromise, delay} from "../../utilities";
 import { processMessage, ProcessMessage } from './processMessage';
 
 export async function follower(serverConfig: ServerConfig, serverState: ServerState): Promise<ServerState> {
     const wss = new WebSocket.Server({port: serverConfig.wssPort});
-
     let state = serverState;
 
     wss.on('connection', function connection(websocket: WebsocketWithPromise) {
-        const [resolve, promise] = resolveableTimeoutPromise(serverConfig.heartbeat);
+        const [resolve, _, promise] = resolveableTimeoutPromise(serverConfig.heartbeat);
         websocket.promise = promise;
         websocket.resolve = resolve;
 
@@ -20,18 +19,18 @@ export async function follower(serverConfig: ServerConfig, serverState: ServerSt
             const parsedMessage = parseMessage(message); 
 
             if (parsedMessage != null) {
-                if (validHeartbeat(parsedMessage)) {
+                if (validHeartbeat(state, parsedMessage)) {
                     websocket.resolve();
                 }
 
                 const result: ProcessMessage = processMessage(state, parsedMessage);
                 state = result.state;
                 websocket.send(result.response);
+
+                const [resolve, _, promise] = resolveableTimeoutPromise(serverConfig.heartbeat);
+                websocket.promise = promise;
+                websocket.resolve = resolve;
             }
-            
-            const [resolve, promise] = resolveableTimeoutPromise(serverConfig.heartbeat);
-            websocket.promise = promise;
-            websocket.resolve = resolve;
         });
     });
 
@@ -61,7 +60,9 @@ export async function follower(serverConfig: ServerConfig, serverState: ServerSt
 
     wss.close();
     
-    const newState = {...serverState, status: StatusType.Candidate};
+    const currentTerm = serverState.currentTerm + 1; // current term is incremented before transitioning to candidate status 
+
+    const newState = {...serverState, currentTerm, status: StatusType.Candidate};
     return newState;
 }
 
@@ -81,6 +82,7 @@ export function parseMessage(message: string): RequestVoteRequest | AppendEntrie
     }
 }
 
-export function validHeartbeat(message: RequestVoteRequest | AppendEntriesRequest | null): boolean {
-    return true;
+export function validHeartbeat(state: ServerState, message: RequestVoteRequest | AppendEntriesRequest | null): boolean {
+    const messageTerm = message.type === 'AppendEntriesRequest' ? message.leadersTerm : message.candidatesTerm;
+    return state.currentTerm <= messageTerm;
 }

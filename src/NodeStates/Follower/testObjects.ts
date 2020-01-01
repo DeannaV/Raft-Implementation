@@ -1,3 +1,4 @@
+import WebSocket from "ws";
 import { ServerConfig, ServerState, StatusType, AppendEntriesRequest, LogEntry, RequestVoteRequest, RequestLogEntry } from '../../types';
 
 export const TEST_SERVER_CONFIG: ServerConfig = {
@@ -72,3 +73,15 @@ export const TEST_REQUEST_VOTE_REQUEST: RequestVoteRequest = {
 export function getTestRequestVoteRequest() {
     return {...TEST_REQUEST_VOTE_REQUEST};
 }
+
+export function getMockWebSocketServer(): WebSocket.Server {
+    return {
+        on: jest.fn(),
+        close: jest.fn(),
+        clients: [],
+    } as unknown as WebSocket.Server;
+}
+
+export function MockDelay(_: number): Promise<void> {
+    return new Promise((res) => res());
+} 

@@ -31,7 +31,8 @@ export function processMessage(serverState: ServerState, message: RequestVoteReq
 
             const responseObj: RequestVoteReply = {
                 currentTerm: result.state.currentTerm,
-                voteGranted: result.voteGranted
+                voteGranted: result.voteGranted,
+                type: 'RequestVoteReply'
             }
             response = JSON.stringify(responseObj);
             break;

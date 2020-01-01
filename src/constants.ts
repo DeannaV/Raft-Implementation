@@ -2,7 +2,7 @@ import { ServerConfig } from './types';
 
 export const wssPorts = [5001, 5002, 5003, 5004, 5005, 5006, 5007, 5008];
 
-export const defaults: Array<ServerConfig> = [
+export const serverConfigs: Array<ServerConfig> = [
     {
         serverName: "Server01",
         apiPort: 8080,
@@ -54,3 +54,7 @@ export const defaults: Array<ServerConfig> = [
 ];
 
 export const NUMBER_OF_NODES = 3;
+
+export const ELECTION_TIMEOUT_MIN = 150;
+
+export const ELECTION_TIMEOUT_MAX = 300;
